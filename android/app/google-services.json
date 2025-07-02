@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "218738781112",
+    "project_id": "walmart-b2b",
+    "storage_bucket": "walmart-b2b.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:218738781112:android:d590af7f366a45cae93d4d",
+        "android_client_info": {
+          "package_name": "com.example.walmart_b2b_app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCx-VbSotnKfVyBGhiCWYA8Ox1UdQEDcmQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
