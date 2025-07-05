@@ -1,597 +1,456 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 
+// Main Supplier Dashboard Page, now styled like the AgreementTenderAdmin
 class SupplierDashboard extends StatefulWidget {
-  const SupplierDashboard({super.key});
+  const SupplierDashboard({Key? key}) : super(key: key);
 
   @override
   State<SupplierDashboard> createState() => _SupplierDashboardState();
 }
 
 class _SupplierDashboardState extends State<SupplierDashboard> {
-  int _selectedIndex = 0;
+  // Define a consistent color palette based on the provided AgreementTenderAdmin code
+  static const Color _primaryBlue = Color(0xFF0071CE); // Walmart Blue
+  static const Color _secondaryGrey = Colors.grey;
 
-  final List<Widget> _pages = [
-    const SupplierOverview(),
-    const OrdersPage(),
-    const ProductsPage(),
-    const ProfilePage(),
-  ];
+  // User and company information
+  User? _currentUser;
+  String _companyName = 'Loading...';
 
   @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Supplier Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.notifications),
-            onPressed: () {
-              // Handle notifications
-            },
+  void initState() {
+    super.initState();
+    _checkAuthAndLoadUserData();
+  }
+
+  // Check Firebase Auth and load user data
+  void _checkAuthAndLoadUserData() {
+    _currentUser = FirebaseAuth.instance.currentUser;
+    
+    if (_currentUser == null) {
+      // User not authenticated, redirect to login
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        Navigator.pushReplacementNamed(context, '/welcome');
+      });
+    } else {
+      // Load company name from user data
+      _loadCompanyName();
+    }
+  }
+
+  // Load company name (you can modify this based on your data structure)
+  void _loadCompanyName() {
+    setState(() {
+      // You can get this from Firestore, user displayName, or any other source
+      // For now, using a placeholder. Replace with actual data fetching logic.
+      _companyName = _currentUser?.displayName ?? 'Your Company Name';
+      
+      // If you want to extract company name from email (example: company@domain.com)
+      if (_companyName == 'Your Company Name' && _currentUser?.email != null) {
+        String email = _currentUser!.email!;
+        if (email.contains('@')) {
+          String domain = email.split('@')[0];
+          _companyName = domain.split('.')[0].toUpperCase() + ' Corp';
+        }
+      }
+    });
+  }
+
+  // Feature password dialog (default: 12345678)
+  void _showFeaturePasswordDialog(BuildContext context, String featureName, String routeName) {
+    TextEditingController passwordController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: Text('Access $featureName'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('Enter password to access $featureName:'),
+              const SizedBox(height: 16),
+              TextField(
+                controller: passwordController,
+                obscureText: true,
+                decoration: const InputDecoration(
+                  labelText: 'Password',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.lock),
+                ),
+              ),
+            ],
           ),
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              try {
-                await FirebaseAuth.instance.signOut();
-                if (context.mounted) {
-                  Navigator.pushReplacementNamed(context, '/welcome');
-                }
-              } catch (e) {
-                if (context.mounted) {
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
+              },
+            ),
+            ElevatedButton(
+              child: const Text('Submit'),
+              onPressed: () {
+                // Check password (default: 12345678)
+                if (passwordController.text == '12345678') {
+                  Navigator.of(dialogContext).pop();
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Error signing out: $e')),
+                    SnackBar(content: Text('Access granted to $featureName!')),
+                  );
+                  // Navigate to the feature page
+                  _navigateToPage(context, routeName);
+                } else {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Incorrect password')),
                   );
                 }
-              }
-            },
-          ),
-        ],
-      ),
-      body: _pages[_selectedIndex],
-      bottomNavigationBar: BottomNavigationBar(
-        type: BottomNavigationBarType.fixed,
-        currentIndex: _selectedIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedIndex = index;
-          });
-        },
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.dashboard),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
-            label: 'Orders',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.inventory),
-            label: 'Products',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.person),
-            label: 'Profile',
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class SupplierOverview extends StatelessWidget {
-  const SupplierOverview({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Welcome Back!',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Stats Cards
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard('Total Orders', '45', Icons.shopping_cart, Colors.blue),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard('Pending Orders', '8', Icons.pending, Colors.orange),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard('Total Products', '23', Icons.inventory, Colors.green),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard('Revenue', '\$12,450', Icons.monetization_on, Colors.purple),
-              ),
-            ],
-          ),
-          const SizedBox(height: 30),
-          // Recent Orders
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Recent Orders',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              TextButton(
-                onPressed: () {
-                  // Navigate to orders page
-                },
-                child: const Text('View All'),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Expanded(
-            child: ListView(
-              children: [
-                _buildOrderItem('Order #1234', 'Pending', Colors.orange, '\$450'),
-                _buildOrderItem('Order #1235', 'Processing', Colors.blue, '\$320'),
-                _buildOrderItem('Order #1236', 'Completed', Colors.green, '\$180'),
-                _buildOrderItem('Order #1237', 'Pending', Colors.orange, '\$675'),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard(String title, String value, IconData icon, Color color) {
-    return Card(
-      elevation: 4,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(icon, color: color, size: 30),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text(
-              title,
-              style: const TextStyle(
-                fontSize: 14,
-                color: Colors.grey,
-              ),
+              },
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderItem(String orderId, String status, Color statusColor, String amount) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: CircleAvatar(
-          backgroundColor: statusColor.withOpacity(0.1),
-          child: Icon(Icons.shopping_cart, color: statusColor),
-        ),
-        title: Text(orderId),
-        subtitle: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-              decoration: BoxDecoration(
-                color: statusColor.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Text(
-                status,
-                style: TextStyle(
-                  color: statusColor,
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-            ),
-          ],
-        ),
-        trailing: Text(
-          amount,
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class OrdersPage extends StatelessWidget {
-  const OrdersPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'My Orders',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Filter Tabs
-          DefaultTabController(
-            length: 4,
-            child: Column(
-              children: [
-                const TabBar(
-                  labelColor: Color(0xFF0071CE),
-                  unselectedLabelColor: Colors.grey,
-                  indicatorColor: Color(0xFF0071CE),
-                  tabs: [
-                    Tab(text: 'All'),
-                    Tab(text: 'Pending'),
-                    Tab(text: 'Processing'),
-                    Tab(text: 'Completed'),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  height: 400,
-                  child: TabBarView(
-                    children: [
-                      _buildOrdersList('all'),
-                      _buildOrdersList('pending'),
-                      _buildOrdersList('processing'),
-                      _buildOrdersList('completed'),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrdersList(String filter) {
-    return ListView.builder(
-      itemCount: 10,
-      itemBuilder: (context, index) {
-        final statuses = ['Pending', 'Processing', 'Completed'];
-        final colors = [Colors.orange, Colors.blue, Colors.green];
-        final statusIndex = index % 3;
-        
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: ListTile(
-            leading: CircleAvatar(
-              backgroundColor: colors[statusIndex].withOpacity(0.1),
-              child: Text('#${1000 + index}'),
-            ),
-            title: Text('Order #${1000 + index}'),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Date: ${DateTime.now().subtract(Duration(days: index)).toString().split(' ')[0]}'),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                  decoration: BoxDecoration(
-                    color: colors[statusIndex].withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    statuses[statusIndex],
-                    style: TextStyle(
-                      color: colors[statusIndex],
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            trailing: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  '\$${(200 + index * 50).toString()}',
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const Icon(Icons.arrow_forward_ios, size: 16),
-              ],
-            ),
-            onTap: () {
-              // View order details
-            },
-          ),
         );
       },
     );
   }
-}
 
-class ProductsPage extends StatelessWidget {
-  const ProductsPage({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'My Products',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  // Add new product
-                },
-                icon: const Icon(Icons.add),
-                label: const Text('Add Product'),
-              ),
-            ],
+  // Placeholder for Admin Password similar to the previous request's lock icon
+  void _showAdminPasswordDialog(BuildContext context) {
+    TextEditingController passwordController = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AlertDialog(
+          title: const Text('Admin Access Required'),
+          content: TextField(
+            controller: passwordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Enter Admin Password',
+              border: OutlineInputBorder(),
+            ),
           ),
-          const SizedBox(height: 20),
-          Expanded(
-            child: GridView.builder(
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.75,
-              ),
-              itemCount: 12,
-              itemBuilder: (context, index) {
-                return Card(
-                  elevation: 4,
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: Container(
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.grey.shade200,
-                            borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
-                          ),
-                          child: const Icon(
-                            Icons.image,
-                            size: 60,
-                            color: Colors.grey,
-                          ),
-                        ),
-                      ),
-                      Padding(
-                        padding: const EdgeInsets.all(12.0),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Product ${index + 1}',
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '\$${(10 + index * 5).toString()}',
-                              style: const TextStyle(
-                                fontSize: 14,
-                                color: Colors.green,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              'Stock: ${20 + index * 3}',
-                              style: const TextStyle(
-                                fontSize: 12,
-                                color: Colors.grey,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                );
+          actions: <Widget>[
+            TextButton(
+              child: const Text('Cancel'),
+              onPressed: () {
+                Navigator.of(dialogContext).pop();
               },
             ),
-          ),
-        ],
-      ),
+            ElevatedButton(
+              child: const Text('Submit'),
+              onPressed: () {
+                // TODO: Implement actual password verification logic here
+                if (passwordController.text == 'admin123') { // Example password
+                  Navigator.of(dialogContext).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('Admin access granted!')),
+                  );
+                  // You might navigate to an admin-specific settings page here
+                  // Navigator.pushNamed(context, '/admin_settings');
+                } else {
+                  ScaffoldMessenger.of(dialogContext).showSnackBar(
+                    const SnackBar(content: Text('Incorrect password')),
+                  );
+                }
+              },
+            ),
+          ],
+        );
+      },
     );
   }
-}
-
-class ProfilePage extends StatelessWidget {
-  const ProfilePage({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(16.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Profile',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-            ),
-          ),
-          const SizedBox(height: 20),
-          // Profile Header
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: Row(
+    // Show loading if user data is not loaded yet
+    if (_currentUser == null) {
+      return const Scaffold(
+        body: Center(
+          child: CircularProgressIndicator(),
+        ),
+      );
+    }
+
+    return Scaffold(
+      backgroundColor: Colors.grey[100], // Light grey background for scaffold
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Blue Header Section (mimicking AgreementTenderAdmin)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 40, 20, 40),
+              decoration: const BoxDecoration(
+                color: _primaryBlue, // Walmart Blue
+                borderRadius: BorderRadius.only(
+                  bottomLeft: Radius.circular(30),
+                  bottomRight: Radius.circular(30),
+                ),
+              ),
+              child: Column(
                 children: [
-                  CircleAvatar(
-                    radius: 30,
-                    backgroundColor: Colors.blue.shade100,
-                    child: const Icon(Icons.person, size: 40, color: Colors.blue),
-                  ),
-                  const SizedBox(width: 16),
-                  const Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  // Top Row with back button and settings/lock icon
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        'John Doe Supplies',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                      GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.arrow_back,
+                            color: Colors.white,
+                            size: 24,
+                          ),
                         ),
                       ),
-                      Text(
-                        'john.doe@supplies.com',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Colors.grey,
+                      GestureDetector(
+                        onTap: () {
+                          // Show admin password dialog when lock icon is tapped
+                          _showAdminPasswordDialog(context);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.2),
+                            shape: BoxShape.circle,
+                          ),
+                          child: const Icon(
+                            Icons.lock, // Admin lock icon
+                            color: Colors.white,
+                            size: 24,
+                          ),
                         ),
                       ),
                     ],
+                  ),
+                  const SizedBox(height: 20),
+                  // Company Name
+                  Text(
+                    _companyName,
+                    style: const TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // Title Section
+                  const Text(
+                    'Supplier Dashboard',
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Manage your operations efficiently',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.white.withOpacity(0.9),
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  // User email
+                  Text(
+                    'Welcome, ${_currentUser?.email ?? 'User'}',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.white.withOpacity(0.8),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 20),
-          // Profile Options
-          Expanded(
-            child: ListView(
-              children: [
-                _buildProfileOption(
-                  'Edit Profile',
-                  Icons.edit,
-                  () {
-                    // Navigate to edit profile
-                  },
+
+            // White Content Section
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Select Your Role/Section',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 30),
+
+                    // Options List (Changed to your specified roles)
+                   Expanded(
+  child: ListView(
+    children: [
+      _buildOptionCard(
+        'Agreement Admin',
+        'Oversee tenders, contracts, and supplier agreements.',
+        Icons.admin_panel_settings,
+        const Color(0xFF4A90E2),
+        () => _showFeaturePasswordDialog(context, 'Agreement Admin', '/agreement_suppplier_page'), // Corrected route name
+      ),
+      const SizedBox(height: 20),
+      _buildOptionCard(
+        'Truck Driver',
+        'View assigned routes, deliveries, and logs.',
+        Icons.local_shipping,
+        const Color(0xFF7ED321),
+        () => _showFeaturePasswordDialog(context, 'Truck Driver', '/truck_driver_dashboard'), // Corrected route name
+      ),
+      const SizedBox(height: 20),
+      _buildOptionCard(
+        'Logistics',
+        'Manage inventory, warehousing, and supply chain.',
+        Icons.bar_chart,
+        const Color(0xFFF5A623),
+        () => _showFeaturePasswordDialog(context, 'Logistics', '/logistics_page'), // Already correct
+      ),
+      const SizedBox(height: 20),
+      _buildOptionCard(
+        'Order Management',
+        'Track and process incoming and outgoing orders.',
+        Icons.shopping_bag,
+        const Color(0xFFBD10E0),
+        () => _showFeaturePasswordDialog(context, 'Order Management', '/order_management_page'), // Already correct
+      ),
+      const SizedBox(height: 30),
+                          // Logout Button
+                          Align(
+                            alignment: Alignment.center,
+                            child: ElevatedButton.icon(
+                              onPressed: () async {
+                                try {
+                                  await FirebaseAuth.instance.signOut();
+                                  if (context.mounted) {
+                                    Navigator.pushReplacementNamed(context, '/welcome');
+                                  }
+                                } catch (e) {
+                                  if (context.mounted) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Error signing out: $e')),
+                                    );
+                                  }
+                                }
+                              },
+                              icon: const Icon(Icons.logout, color: Colors.white),
+                              label: const Text(
+                                'Logout',
+                                style: TextStyle(color: Colors.white, fontSize: 16),
+                              ),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: Colors.red,
+                                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                elevation: 5,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                _buildProfileOption(
-                  'Business Information',
-                  Icons.business,
-                  () {
-                    // Navigate to business info
-                  },
-                ),
-                _buildProfileOption(
-                  'Payment Settings',
-                  Icons.payment,
-                  () {
-                    // Navigate to payment settings
-                  },
-                ),
-                _buildProfileOption(
-                  'Notifications',
-                  Icons.notifications,
-                  () {
-                    // Navigate to notifications
-                  },
-                ),
-                _buildProfileOption(
-                  'Help & Support',
-                  Icons.help,
-                  () {
-                    // Navigate to help
-                  },
-                ),
-                _buildProfileOption(
-                  'Settings',
-                  Icons.settings,
-                  () {
-                    // Navigate to settings
-                  },
-                ),
-                const SizedBox(height: 20),
-                ElevatedButton(
-                  onPressed: () async {
-                    try {
-                      await FirebaseAuth.instance.signOut();
-                      if (context.mounted) {
-                        Navigator.pushReplacementNamed(context, '/welcome');
-                      }
-                    } catch (e) {
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(content: Text('Error signing out: $e')),
-                        );
-                      }
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    foregroundColor: Colors.white,
-                  ),
-                  child: const Text('Logout'),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
-  Widget _buildProfileOption(String title, IconData icon, VoidCallback onTap) {
-    return Card(
-      margin: const EdgeInsets.only(bottom: 8),
-      child: ListTile(
-        leading: Icon(icon, color: const Color(0xFF0071CE)),
-        title: Text(title),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: onTap,
+  // Reusable option card widget from the AgreementTenderAdmin
+  Widget _buildOptionCard(String title, String description, IconData icon, Color iconColor, VoidCallback onTap) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.05),
+              blurRadius: 10,
+              offset: const Offset(0, 2),
+            ),
+          ],
+          border: Border.all(color: Colors.grey.withOpacity(0.1)),
+        ),
+        child: Row(
+          children: [
+            // Icon Container
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: iconColor.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                icon,
+                size: 28,
+                color: iconColor,
+              ),
+            ),
+            const SizedBox(width: 20),
+            // Text Content
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: const TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black87,
+                    ),
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.grey[600],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Arrow Icon
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 16,
+              color: Colors.grey[400],
+            ),
+          ],
+        ),
       ),
     );
+  }
+
+  // Navigation method - now properly handles routing
+  void _navigateToPage(BuildContext context, String routeName) {
+    try {
+      Navigator.pushNamed(context, routeName);
+    } catch (e) {
+      // If named route doesn't exist, show error
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Route $routeName not found. Please check your route definitions.'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
   }
 }
