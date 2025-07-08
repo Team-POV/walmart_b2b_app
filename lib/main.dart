@@ -74,7 +74,7 @@ class MyApp extends StatelessWidget {
         '/order_management_page':(context) => OrderManagementSupplier(),
         '/logistics_page':(context) => LogistisSupplier(),
      '/agreement_suppplier_page': (context) => SuplierAdmin(),
-        '/truck_driver_dashboard': (context) => TruckDriverScreen(),
+        '/truck_driver_dashboard': (context) => TruckDeliveryApp(),
         '/suppier_bidding_page': (context) => BiddingSuppier(),
         '/manageing_agreement': (context) => ManagingAgreement() }
     );

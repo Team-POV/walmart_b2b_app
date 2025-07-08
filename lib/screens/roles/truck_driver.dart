@@ -1,1259 +1,1179 @@
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'dart:async';
 import 'dart:math';
-import 'package:flutter/services.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import 'dart:convert';
-import 'package:flutter_spinkit/flutter_spinkit.dart';
-import 'package:latlong2/latlong.dart' as latlong;
-import 'package:flutter_polyline_points/flutter_polyline_points.dart';
-
-// Shared data
-final List<String> walmartLocations = [
-  'Walmart Bangalore Central',
-  'Walmart Hyderabad West',
-  'Walmart Mumbai East',
-  'Walmart Chennai North',
-  'Walmart Delhi NCR',
-  'Walmart Pune South',
-  'Walmart Kolkata Central',
-  'Walmart Ahmedabad',
-  'Walmart Jaipur',
-  'Walmart Kochi'
-];
-
-final List<LatLng> walmartCoords = [
-  LatLng(12.9716, 77.5946), // Bangalore
-  LatLng(17.3850, 78.4867), // Hyderabad
-  LatLng(19.0760, 72.8777), // Mumbai
-  LatLng(13.0827, 80.2707), // Chennai
-  LatLng(28.7041, 77.1025), // Delhi
-  LatLng(18.5204, 73.8567), // Pune
-  LatLng(22.5726, 88.3639), // Kolkata
-  LatLng(23.0225, 72.5714), // Ahmedabad
-  LatLng(26.9124, 75.7873), // Jaipur
-  LatLng(9.9312, 76.2673),  // Kochi
-];
-
-// Models
-class DeliveryOrder {
-  final String id;
-  final String productName;
-  final int quantity;
-  final String destination;
-  final LatLng destinationCoords;
-  final String status;
-  final double weight;
-  final String priority;
-  final DateTime estimatedDelivery;
-  final double distance;
-  final double carbonFootprint;
-  final String timeSlot;
-  final LatLng originCoords;
-
-  DeliveryOrder({
-    required this.id,
-    required this.productName,
-    required this.quantity,
-    required this.destination,
-    required this.destinationCoords,
-    required this.status,
-    required this.weight,
-    required this.priority,
-    required this.estimatedDelivery,
-    required this.distance,
-    required this.carbonFootprint,
-    required this.timeSlot,
-    required this.originCoords,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'productName': productName,
-        'quantity': quantity,
-        'destination': destination,
-        'destinationCoords': {'lat': destinationCoords.latitude, 'lng': destinationCoords.longitude},
-        'status': status,
-        'weight': weight,
-        'priority': priority,
-        'estimatedDelivery': estimatedDelivery.toIso8601String(),
-        'distance': distance,
-        'carbonFootprint': carbonFootprint,
-        'timeSlot': timeSlot,
-        'originCoords': {'lat': originCoords.latitude, 'lng': originCoords.longitude},
-      };
-
-  factory DeliveryOrder.fromJson(Map<String, dynamic> json) => DeliveryOrder(
-        id: json['id'],
-        productName: json['productName'],
-        quantity: json['quantity'],
-        destination: json['destination'],
-        destinationCoords: LatLng(json['destinationCoords']['lat'], json['destinationCoords']['lng']),
-        status: json['status'],
-        weight: json['weight'],
-        priority: json['priority'],
-        estimatedDelivery: DateTime.parse(json['estimatedDelivery']),
-        distance: json['distance'],
-        carbonFootprint: json['carbonFootprint'],
-        timeSlot: json['timeSlot'],
-        originCoords: LatLng(json['originCoords']['lat'], json['originCoords']['lng']),
-      );
+import 'dart:ui' as ui;
+import 'package:flutter/services.dart' show rootBundle;
+import 'dart:typed_data';
+void main() {
+  runApp(TruckDeliveryApp());
 }
 
-class DriverProfile {
-  final String id;
-  final String name;
-  final String vehicleNumber;
-  final String vehicleType;
-  final double carbonFootprint;
-  final int deliveriesCompleted;
-  final LatLng currentLocation;
-  final String timeSlot;
-  final bool isAvailable;
-  final double rating;
-  final String phoneNumber;
-
-  DriverProfile({
-    required this.id,
-    required this.name,
-    required this.vehicleNumber,
-    required this.vehicleType,
-    required this.carbonFootprint,
-    required this.deliveriesCompleted,
-    required this.currentLocation,
-    required this.timeSlot,
-    required this.isAvailable,
-    required this.rating,
-    required this.phoneNumber,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'id': id,
-        'name': name,
-        'vehicleNumber': vehicleNumber,
-        'vehicleType': vehicleType,
-        'carbonFootprint': carbonFootprint,
-        'deliveriesCompleted': deliveriesCompleted,
-        'currentLocation': {'lat': currentLocation.latitude, 'lng': currentLocation.longitude},
-        'timeSlot': timeSlot,
-        'isAvailable': isAvailable,
-        'rating': rating,
-        'phoneNumber': phoneNumber,
-      };
-
-  factory DriverProfile.fromJson(Map<String, dynamic> json) => DriverProfile(
-        id: json['id'],
-        name: json['name'],
-        vehicleNumber: json['vehicleNumber'],
-        vehicleType: json['vehicleType'],
-        carbonFootprint: json['carbonFootprint'],
-        deliveriesCompleted: json['deliveriesCompleted'],
-        currentLocation: LatLng(json['currentLocation']['lat'], json['currentLocation']['lng']),
-        timeSlot: json['timeSlot'],
-        isAvailable: json['isAvailable'],
-        rating: json['rating'],
-        phoneNumber: json['phoneNumber'],
-      );
-}
-
-class LeaderboardEntry {
-  final String driverName;
-  final double carbonSaved;
-  final int greenDeliveries;
-  final String vehicleType;
-  final double rating;
-
-  LeaderboardEntry({
-    required this.driverName,
-    required this.carbonSaved,
-    required this.greenDeliveries,
-    required this.vehicleType,
-    required this.rating,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'driverName': driverName,
-        'carbonSaved': carbonSaved,
-        'greenDeliveries': greenDeliveries,
-        'vehicleType': vehicleType,
-        'rating': rating,
-      };
-
-  factory LeaderboardEntry.fromJson(Map<String, dynamic> json) => LeaderboardEntry(
-        driverName: json['driverName'],
-        carbonSaved: json['carbonSaved'],
-        greenDeliveries: json['greenDeliveries'],
-        vehicleType: json['vehicleType'],
-        rating: json['rating'],
-      );
-}
-
-class TimeSlot {
-  final String time;
-  final int trucksAllocated;
-  final int maxCapacity;
-  final List<String> driverNames;
-
-  TimeSlot({
-    required this.time,
-    required this.trucksAllocated,
-    required this.maxCapacity,
-    required this.driverNames,
-  });
-
-  Map<String, dynamic> toJson() => {
-        'time': time,
-        'trucksAllocated': trucksAllocated,
-        'maxCapacity': maxCapacity,
-        'driverNames': driverNames,
-      };
-
-  factory TimeSlot.fromJson(Map<String, dynamic> json) => TimeSlot(
-        time: json['time'],
-        trucksAllocated: json['trucksAllocated'],
-        maxCapacity: json['maxCapacity'],
-        driverNames: List<String>.from(json['driverNames']),
-      );
-}
-
-// Data Generator
-class TruckDriverDataGenerator {
-  static final Random _random = Random();
-  
-  static final List<String> _products = [
-    'Electronics Bundle', 'Clothing Collection', 'Fresh Produce', 
-    'Book Set', 'Furniture Items', 'Toy Collection', 
-    'Sports Gear', 'Kitchen Appliances', 'Beauty Products',
-    'Health Supplements', 'Auto Parts', 'Garden Equipment'
-  ];
-  
-  static final List<String> _vehicleTypes = [
-    'Tata Ace', 'Mahindra Bolero Pickup', 'Ashok Leyland Dost',
-    'Eicher Pro 1049', 'Tata 407', 'Mahindra Furio 7'
-  ];
-  
-  static final List<String> _timeSlots = [
-  '06:00 - 08:00',
-  '08:00 - 10:00',
-  '10:00 - 12:00',
-  '12:00 - 14:00',
-  '14:00 - 16:00',
-  '16:00 - 18:00'
-];
-  
-  static final List<String> _driverNames = [
-    'Rajesh Kumar', 'Amit Singh', 'Suresh Patel', 'Vikram Sharma',
-    'Ravi Gupta', 'Manoj Yadav', 'Santosh Joshi', 'Deepak Verma',
-    'Arjun Reddy', 'Kiran Patel', 'Rohit Sharma', 'Naveen Kumar'
-  ];
-
-  static DriverProfile generateDriverProfile() {
-    final locationIndex = _random.nextInt(walmartCoords.length);
-    return DriverProfile(
-      id: 'DRV${DateTime.now().millisecondsSinceEpoch}',
-      name: _driverNames[_random.nextInt(_driverNames.length)],
-      vehicleNumber: '${['KA', 'MH', 'TN', 'DL', 'UP', 'GJ'][_random.nextInt(6)]}${10 + _random.nextInt(40)}${['A', 'B', 'C'][_random.nextInt(3)]}${1000 + _random.nextInt(9000)}',
-      vehicleType: _vehicleTypes[_random.nextInt(_vehicleTypes.length)],
-      carbonFootprint: 50.0 + _random.nextDouble() * 200.0,
-      deliveriesCompleted: _random.nextInt(500) + 50,
-      currentLocation: walmartCoords[locationIndex],
-      timeSlot: _timeSlots[_random.nextInt(_timeSlots.length)],
-      isAvailable: _random.nextBool(),
-      rating: 3.5 + _random.nextDouble() * 1.5,
-      phoneNumber: '+91${7000000000 + _random.nextInt(2999999999)}',
-    );
-  }
-
-  static DeliveryOrder generateRandomOrder() {
-    final locationIndex = _random.nextInt(walmartCoords.length);
-    final originIndex = _random.nextInt(walmartCoords.length);
-    final distance = 5.0 + _random.nextDouble() * 45.0;
-    final weight = 10.0 + _random.nextDouble() * 500.0;
-    final carbonFootprint = (distance * 0.5) + (weight * 0.02);
-    
-    return DeliveryOrder(
-      id: 'ORD${DateTime.now().millisecondsSinceEpoch}${_random.nextInt(1000)}',
-      productName: _products[_random.nextInt(_products.length)],
-      quantity: _random.nextInt(50) + 1,
-      destination: walmartLocations[locationIndex],
-      destinationCoords: walmartCoords[locationIndex],
-      status: ['Pending', 'In Transit', 'Delivered'][_random.nextInt(3)],
-      weight: weight,
-      priority: ['High', 'Medium', 'Low'][_random.nextInt(3)],
-      estimatedDelivery: DateTime.now().add(Duration(hours: _random.nextInt(48) + 1)),
-      distance: distance,
-      carbonFootprint: carbonFootprint,
-      timeSlot: _timeSlots[_random.nextInt(_timeSlots.length)],
-      originCoords: walmartCoords[originIndex],
-    );
-  }
-
-  static List<LeaderboardEntry> generateLeaderboard() {
-    return List.generate(10, (index) {
-      final carbonSaved = 50.0 + _random.nextDouble() * 500.0;
-      return LeaderboardEntry(
-        driverName: _driverNames[_random.nextInt(_driverNames.length)],
-        carbonSaved: carbonSaved,
-        greenDeliveries: _random.nextInt(200) + 50,
-        vehicleType: _vehicleTypes[_random.nextInt(_vehicleTypes.length)],
-        rating: 3.5 + _random.nextDouble() * 1.5,
-      );
-    })..sort((a, b) => b.carbonSaved.compareTo(a.carbonSaved));
-  }
-
-  static List<TimeSlot> generateTimeSlots() {
-    return _timeSlots.map((time) {
-      final trucksAllocated = _random.nextInt(8) + 2;
-      final maxCapacity = trucksAllocated + _random.nextInt(5) + 1;
-      final drivers = List.generate(trucksAllocated, 
-        (index) => _driverNames[_random.nextInt(_driverNames.length)]);
-      
-      return TimeSlot(
-        time: time,
-        trucksAllocated: trucksAllocated,
-        maxCapacity: maxCapacity,
-        driverNames: drivers,
-      );
-    }).toList();
-  }
-}
-
-// Main Truck Driver Screen
-class TruckDriverScreen extends StatefulWidget {
+class TruckDeliveryApp extends StatelessWidget {
   @override
-  _TruckDriverScreenState createState() => _TruckDriverScreenState();
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      title: 'EcoTruck Delivery',
+      theme: ThemeData(
+        primarySwatch: Colors.green,
+        scaffoldBackgroundColor: Colors.grey[50],
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.green[700],
+          foregroundColor: Colors.white,
+        ),
+      ),
+      home: MainScreen(),
+    );
+  }
 }
 
-class _TruckDriverScreenState extends State<TruckDriverScreen>
-    with SingleTickerProviderStateMixin {
-  late GoogleMapController mapController;
-  late DriverProfile currentDriver;
-  late List<DeliveryOrder> orders;
-  late List<LeaderboardEntry> leaderboard;
-  late List<TimeSlot> timeSlots;
-  int _selectedIndex = 0;
-  bool _isRefreshing = false;
-  late AnimationController _animationController;
-  Map<String, List<LatLng>> _polylinePoints = {};
-  late Future<void> _loadStateFuture;
+class MainScreen extends StatefulWidget {
+  @override
+  _MainScreenState createState() => _MainScreenState();
+}
+
+class _MainScreenState extends State<MainScreen> {
+  int _currentIndex = 0;
+  final List<Widget> _screens = [
+    DeliveryScreen(),
+    LeaderboardScreen(),
+    UnloadingScreen(),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: _screens[_currentIndex],
+      bottomNavigationBar: Container(
+        decoration: BoxDecoration(
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              offset: Offset(0, -5),
+            ),
+          ],
+        ),
+        child: BottomNavigationBar(
+          currentIndex: _currentIndex,
+          onTap: (index) => setState(() => _currentIndex = index),
+          backgroundColor: Colors.white,
+          selectedItemColor: Colors.green[700],
+          unselectedItemColor: Colors.grey[600],
+          type: BottomNavigationBarType.fixed,
+          items: [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.local_shipping),
+              label: 'Delivery',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.leaderboard),
+              label: 'Leaderboard',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.inventory),
+              label: 'Unloading',
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class DeliveryScreen extends StatefulWidget {
+  @override
+  _DeliveryScreenState createState() => _DeliveryScreenState();
+}
+
+class _DeliveryScreenState extends State<DeliveryScreen>
+    with TickerProviderStateMixin {
+  GoogleMapController? _mapController;
+  bool _orderAccepted = false;
+  bool _isDelivering = false;
+  int _currentWaypoint = 0;
+  Timer? _deliveryTimer;
+  BitmapDescriptor? _truckIcon;
+
+  // Realistic route points from supplier to Walmart warehouse
+  final List<LatLng> _routePoints = [
+    LatLng(12.9716, 77.5946), // Supplier location (Bangalore)
+    LatLng(12.9750, 77.6050), // Waypoint 1
+    LatLng(12.9800, 77.6150), // Waypoint 2
+    LatLng(12.9850, 77.6250), // Waypoint 3
+    LatLng(12.9900, 77.6350), // Waypoint 4
+    LatLng(12.9950, 77.6450), // Waypoint 5
+    LatLng(13.0000, 77.6550), // Walmart warehouse
+  ];
+
+  Set<Marker> _markers = {};
+  Set<Polyline> _polylines = {};
+  LatLng _currentPosition = LatLng(12.9716, 77.5946);
 
   @override
   void initState() {
     super.initState();
-    _animationController = AnimationController(
-      duration: Duration(milliseconds: 1000),
-      vsync: this,
-    )..repeat(reverse: true);
-    _loadStateFuture = _loadState().catchError((e) {
-      print('Error loading state: $e');
+    _setupInitialMarkers();
+    _loadCustomMarker();
+  }
+
+  Future<void> _loadCustomMarker() async {
+    final ByteData data = await rootBundle.load('assets/images/truck_icon.png');
+    final ui.Codec codec = await ui.instantiateImageCodec(
+      data.buffer.asUint8List(),
+      targetWidth: 80,
+    );
+    final ui.FrameInfo fi = await codec.getNextFrame();
+    final ByteData? byteData = await fi.image.toByteData(format: ui.ImageByteFormat.png);
+    final Uint8List resizedImage = byteData!.buffer.asUint8List();
+    setState(() {
+      _truckIcon = BitmapDescriptor.fromBytes(resizedImage);
     });
   }
 
-  Future<void> _loadState() async {
-    final prefs = await SharedPreferences.getInstance();
-    try {
-      final driverJson = prefs.getString('driverProfile');
-      final ordersJson = prefs.getString('orders');
-      final leaderboardJson = prefs.getString('leaderboard');
-      final timeSlotsJson = prefs.getString('timeSlots');
-      final selectedIndex = prefs.getInt('selectedIndex') ?? 0;
+  void _setupInitialMarkers() {
+    _markers.add(
+      Marker(
+        markerId: MarkerId('supplier'),
+        position: _routePoints.first,
+        infoWindow: InfoWindow(
+          title: 'Supplier Location',
+          snippet: 'Ready for pickup',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
+      ),
+    );
 
-      currentDriver = driverJson != null
-          ? DriverProfile.fromJson(jsonDecode(driverJson))
-          : TruckDriverDataGenerator.generateDriverProfile();
-      orders = ordersJson != null
-          ? (jsonDecode(ordersJson) as List)
-              .map((e) => DeliveryOrder.fromJson(e))
-              .toList()
-          : List.generate(5, (index) => TruckDriverDataGenerator.generateRandomOrder());
-      leaderboard = leaderboardJson != null
-          ? (jsonDecode(leaderboardJson) as List)
-              .map((e) => LeaderboardEntry.fromJson(e))
-              .toList()
-          : TruckDriverDataGenerator.generateLeaderboard();
-      timeSlots = timeSlotsJson != null
-          ? (jsonDecode(timeSlotsJson) as List)
-              .map((e) => TimeSlot.fromJson(e))
-              .toList()
-          : TruckDriverDataGenerator.generateTimeSlots();
-      _selectedIndex = selectedIndex;
-
-      await _fetchPolylines();
-    } catch (e) {
-      print('Error loading data: $e');
-      // Fallback to default data if loading fails
-      currentDriver = TruckDriverDataGenerator.generateDriverProfile();
-      orders = List.generate(5, (index) => TruckDriverDataGenerator.generateRandomOrder());
-      leaderboard = TruckDriverDataGenerator.generateLeaderboard();
-      timeSlots = TruckDriverDataGenerator.generateTimeSlots();
-    }
-    if (mounted) {
-      setState(() {});
-    }
+    _markers.add(
+      Marker(
+        markerId: MarkerId('walmart'),
+        position: _routePoints.last,
+        infoWindow: InfoWindow(
+          title: 'Walmart Warehouse',
+          snippet: 'Delivery destination',
+        ),
+        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+      ),
+    );
   }
 
-  Future<void> _saveState() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('driverProfile', jsonEncode(currentDriver.toJson()));
-    await prefs.setString('orders', jsonEncode(orders.map((e) => e.toJson()).toList()));
-    await prefs.setString('leaderboard', jsonEncode(leaderboard.map((e) => e.toJson()).toList()));
-    await prefs.setString('timeSlots', jsonEncode(timeSlots.map((e) => e.toJson()).toList()));
-    await prefs.setInt('selectedIndex', _selectedIndex);
+  void _acceptOrder() {
+    setState(() {
+      _orderAccepted = true;
+    });
+    
+    _createRoute();
+    _startDelivery();
   }
 
-  Future<void> _refreshData() async {
-    setState(() => _isRefreshing = true);
-    await Future.delayed(Duration(seconds: 1)); // Simulate network delay
-    try {
-      currentDriver = TruckDriverDataGenerator.generateDriverProfile();
-      orders = List.generate(5, (index) => TruckDriverDataGenerator.generateRandomOrder());
-      leaderboard = TruckDriverDataGenerator.generateLeaderboard();
-      timeSlots = TruckDriverDataGenerator.generateTimeSlots();
-      await _fetchPolylines();
-    } catch (e) {
-      print('Error refreshing data: $e');
-    }
-    if (mounted) {
-      setState(() => _isRefreshing = false);
-    }
-    await _saveState();
+  void _createRoute() {
+    _polylines.add(
+      Polyline(
+        polylineId: PolylineId('delivery_route'),
+        points: _routePoints,
+        color: Colors.green,
+        width: 5,
+        patterns: [PatternItem.dash(20), PatternItem.gap(10)],
+      ),
+    );
   }
 
-  Future<void> _fetchPolylines() async {
-    final polylinePoints = PolylinePoints();
-    _polylinePoints.clear();
+  void _startDelivery() {
+    setState(() {
+      _isDelivering = true;
+    });
 
-    for (var order in orders) {
-      try {
-        final result = await polylinePoints.getRouteBetweenCoordinates(
-          'YOUR_API_KEY_HERE', // Replace with a valid Google Maps API key
-          PointLatLng(order.originCoords.latitude, order.originCoords.longitude),
-          PointLatLng(order.destinationCoords.latitude, order.destinationCoords.longitude),
-        );
+    _deliveryTimer = Timer.periodic(Duration(seconds: 3), (timer) {
+      if (_currentWaypoint < _routePoints.length - 1) {
+        setState(() {
+          _currentWaypoint++;
+          _currentPosition = _routePoints[_currentWaypoint];
+        });
 
-        if (result.points.isNotEmpty) {
-          _polylinePoints[order.id] = result.points
-              .map((point) => LatLng(point.latitude, point.longitude))
-              .toList();
-        } else {
-          _polylinePoints[order.id] = [order.originCoords, order.destinationCoords];
-        }
-      } catch (e) {
-        print('Error fetching polyline for order ${order.id}: $e');
-        _polylinePoints[order.id] = [order.originCoords, order.destinationCoords];
+        _updateTruckMarker();
+        _animateCamera();
+      } else {
+        timer.cancel();
+        setState(() {
+          _isDelivering = false;
+        });
+        _showDeliveryComplete();
       }
-    }
-    if (mounted) {
-      setState(() {});
-    }
+    });
+  }
+
+  void _updateTruckMarker() {
+    _markers.removeWhere((marker) => marker.markerId.value == 'truck');
+    _markers.add(
+      Marker(
+        markerId: MarkerId('truck'),
+        position: _currentPosition,
+        infoWindow: InfoWindow(
+          title: 'Ramesh\'s Truck',
+          snippet: 'En route to Walmart',
+        ),
+        icon: _truckIcon ?? BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueOrange),
+      ),
+    );
+  }
+
+  void _animateCamera() {
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _currentPosition,
+          zoom: 14,
+          tilt: 30,
+        ),
+      ),
+    );
+  }
+
+  void _recenterCamera() {
+    _mapController?.animateCamera(
+      CameraUpdate.newCameraPosition(
+        CameraPosition(
+          target: _currentPosition,
+          zoom: 14,
+          tilt: 30,
+        ),
+      ),
+    );
+  }
+
+  void _showDeliveryComplete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Delivery Complete!'),
+        content: Text('Successfully delivered to Walmart warehouse'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   void dispose() {
-    _animationController.dispose();
-    mapController.dispose();
+    _deliveryTimer?.cancel();
+    _mapController?.dispose();
     super.dispose();
-  }
-
-  void _onMapCreated(GoogleMapController controller) {
-    try {
-      mapController = controller;
-      controller.setMapStyle('''
-        [
-          {
-            "elementType": "geometry",
-            "stylers": [{"color": "#f5f5f5"}]
-          },
-          {
-            "elementType": "labels.text.fill",
-            "stylers": [{"color": "#616161"}]
-          },
-          {
-            "elementType": "labels.text.stroke",
-            "stylers": [{"color": "#f5f5f5"}]
-          },
-          {
-            "featureType": "road",
-            "elementType": "geometry",
-            "stylers": [{"color": "#ffffff"}]
-          },
-          {
-            "featureType": "road",
-            "elementType": "geometry.stroke",
-            "stylers": [{"color": "#d3d3d3"}]
-          },
-          {
-            "featureType": "water",
-            "elementType": "geometry.fill",
-            "stylers": [{"color": "#4fc3f7"}]
-          }
-        ]
-      ''');
-    } catch (e) {
-      print('Error creating map: $e');
-    }
-  }
-
-  Set<Marker> _buildMarkers() {
-    Set<Marker> markers = {};
-    
-    try {
-      markers.add(Marker(
-        markerId: MarkerId('driver_${currentDriver.id}'),
-        position: currentDriver.currentLocation,
-        icon: BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueBlue),
-        infoWindow: InfoWindow(
-          title: 'Your Location',
-          snippet: '${currentDriver.name} - ${currentDriver.vehicleNumber}',
-        ),
-      ));
-
-      for (var order in orders) {
-        markers.add(Marker(
-          markerId: MarkerId('order_${order.id}'),
-          position: order.destinationCoords,
-          icon: BitmapDescriptor.defaultMarkerWithHue(
-            order.priority == 'High' ? BitmapDescriptor.hueRed :
-            order.priority == 'Medium' ? BitmapDescriptor.hueOrange :
-            BitmapDescriptor.hueGreen
-          ),
-          infoWindow: InfoWindow(
-            title: order.destination,
-            snippet: 'From: ${walmartLocations[walmartCoords.indexOf(order.originCoords)]}\nTo: ${order.productName} - ${order.distance.toStringAsFixed(1)} km',
-          ),
-        ));
-      }
-    } catch (e) {
-      print('Error building markers: $e');
-    }
-
-    return markers;
-  }
-
-  Set<Polyline> _buildRoutes() {
-    Set<Polyline> polylines = {};
-    
-    try {
-      for (var order in orders) {
-        final points = _polylinePoints[order.id] ?? [order.originCoords, order.destinationCoords];
-        polylines.add(Polyline(
-          polylineId: PolylineId('route_${order.id}'),
-          points: points,
-          color: order.priority == 'High' ? Colors.red :
-                 order.priority == 'Medium' ? Colors.orange : Colors.green,
-          width: 5,
-          patterns: [PatternItem.dash(20), PatternItem.gap(10)],
-          geodesic: true,
-        ));
-      }
-    } catch (e) {
-      print('Error building routes: $e');
-    }
-
-    return polylines;
   }
 
   @override
   Widget build(BuildContext context) {
-    return FutureBuilder<void>(
-      future: _loadStateFuture,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Center(child: SpinKitFadingCube(color: Colors.blue[600], size: 50));
-        } else if (snapshot.hasError) {
-          return Center(child: Text('Error loading data. Please try again.'));
-        } else {
-          return Scaffold(
-            appBar: AppBar(
-              title: Text('🚛 Driver Dashboard', style: TextStyle(fontWeight: FontWeight.bold)),
-              backgroundColor: Colors.blue[800],
-              elevation: 0,
-              actions: [
-                _isRefreshing
-                    ? Padding(
-                        padding: EdgeInsets.all(8.0),
-                        child: SpinKitFadingCircle(color: Colors.white, size: 24),
-                      )
-                    : IconButton(
-                        icon: Icon(Icons.refresh),
-                        onPressed: _refreshData,
-                      ),
-                IconButton(
-                  icon: Icon(Icons.settings),
-                  onPressed: () {
-                    // Add settings functionality
-                  },
-                ),
-              ],
-              flexibleSpace: Container(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [Colors.blue[800]!, Colors.blue[400]!],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('EcoTruck Delivery'),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          if (!_orderAccepted) _buildOrderCard(),
+          if (_orderAccepted) _buildDeliveryStats(),
+          Expanded(
+            child: Container(
+              margin: EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(15),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black12,
+                    blurRadius: 10,
+                    offset: Offset(0, 5),
                   ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(15),
+                child: GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: _routePoints.first,
+                    zoom: 14,
+                    tilt: 30,
+                  ),
+                  onMapCreated: (controller) => _mapController = controller,
+                  markers: _markers,
+                  polylines: _polylines,
+                  myLocationEnabled: false,
+                  myLocationButtonEnabled: false,
+                  zoomControlsEnabled: true,
+                  compassEnabled: true,
+                  mapType: MapType.normal,
                 ),
               ),
             ),
-            body: _isRefreshing
-                ? Center(child: SpinKitFadingCube(color: Colors.blue[600], size: 50))
-                : _buildBody(),
-            bottomNavigationBar: BottomNavigationBar(
-              currentIndex: _selectedIndex,
-              onTap: (index) {
-                FocusScope.of(context).unfocus();
-                setState(() => _selectedIndex = index);
-                _saveState();
-              },
-              type: BottomNavigationBarType.fixed,
-              selectedItemColor: Colors.blue[800],
-              unselectedItemColor: Colors.grey[600],
-              backgroundColor: Colors.white,
-              elevation: 10,
-              items: [
-                BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Dashboard'),
-                BottomNavigationBarItem(icon: Icon(Icons.map), label: 'Map'),
-                BottomNavigationBarItem(icon: Icon(Icons.schedule), label: 'Schedule'),
-                BottomNavigationBarItem(icon: Icon(Icons.leaderboard), label: 'Leaderboard'),
-              ],
-            ),
-          );
-        }
-      },
-    );
-  }
-
-  Widget _buildBody() {
-    return AnimatedSwitcher(
-      duration: Duration(milliseconds: 300),
-      child: [
-        _buildDashboard(),
-        _buildMapView(),
-        _buildTimeSlots(),
-        _buildLeaderboard(),
-      ][_selectedIndex],
-    );
-  }
-
-  Widget _buildDashboard() {
-    return SingleChildScrollView(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        children: [
-          _buildDriverInfoCard(),
-          SizedBox(height: 16),
-          _buildOrdersList(),
-          SizedBox(height: 16),
-          _buildCarbonFootprintCard(),
-          SizedBox(height: 16),
-          _buildQuickStats(),
+          ),
         ],
       ),
+      floatingActionButton: _orderAccepted
+          ? FloatingActionButton(
+              onPressed: _recenterCamera,
+              backgroundColor: Colors.green[700],
+              child: Icon(Icons.my_location, color: Colors.white),
+            )
+          : null,
     );
   }
 
-  Widget _buildDriverInfoCard() {
-    return Card(
-      elevation: 10,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [Colors.blue[300]!, Colors.blue[600]!],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+  Widget _buildOrderCard() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
           ),
-        ),
-        padding: EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Hero(
-                  tag: 'driver_avatar',
-                  child: CircleAvatar(
-                    radius: 40,
-                    backgroundColor: Colors.white,
-                    child: Icon(Icons.person, size: 50, color: Colors.blue[600]),
-                  ),
-                ),
-                SizedBox(width: 20),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        currentDriver.name,
-                        style: TextStyle(
-                          fontSize: 26,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.white,
-                        ),
-                      ),
-                      SizedBox(height: 4),
-                      Text(
-                        currentDriver.vehicleNumber,
-                        style: TextStyle(fontSize: 16, color: Colors.white70),
-                      ),
-                      Text(
-                        currentDriver.vehicleType,
-                        style: TextStyle(fontSize: 14, color: Colors.white70),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-            SizedBox(height: 20),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildInfoItem('Rating', '⭐ ${currentDriver.rating.toStringAsFixed(1)}', Icons.star),
-                _buildInfoItem('Deliveries', '${currentDriver.deliveriesCompleted}', Icons.local_shipping),
-                _buildInfoItem('Time Slot', currentDriver.timeSlot, Icons.schedule),
-              ],
-            ),
-          ],
-        ),
+        ],
       ),
-    );
-  }
-
-  Widget _buildInfoItem(String label, String value, IconData icon) {
-    return FadeTransition(
-      opacity: _animationController,
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
-              Icon(icon, color: Colors.white70, size: 20),
-              SizedBox(width: 4),
-              Text(
-                value,
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.white,
+              CircleAvatar(
+                backgroundColor: Colors.green[100],
+                child: Icon(Icons.local_shipping, color: Colors.green[700]),
+              ),
+              SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'New Delivery Order',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.grey[800],
+                      ),
+                    ),
+                    Text(
+                      'From Supplier to Walmart Warehouse',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 14,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ],
           ),
-          Text(
-            label,
-            style: TextStyle(fontSize: 12, color: Colors.white70),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              _buildInfoChip('Distance', '25.4 km'),
+              SizedBox(width: 12),
+              _buildInfoChip('Est. Time', '45 min'),
+            ],
           ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOrdersList() {
-    return Card(
-      elevation: 10,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Assigned Orders',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.grey[800],
-                  ),
+          SizedBox(height: 16),
+          Row(
+            children: [
+              _buildInfoChip('Eco Score', '+85 pts'),
+              SizedBox(width: 12),
+              _buildInfoChip('Carbon Saved', '12.3 kg'),
+            ],
+          ),
+          SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: _acceptOrder,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.green[700],
+                foregroundColor: Colors.white,
+                padding: EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                IconButton(
-                  icon: Icon(Icons.sort),
-                  onPressed: () {
-                    setState(() {
-                      orders.sort((a, b) => a.priority.compareTo(b.priority));
-                    });
-                    _saveState();
-                  },
-                ),
-              ],
-            ),
-            SizedBox(height: 16),
-            ...orders.asMap().entries.map((entry) => _buildOrderItem(entry.value, entry.key)).toList(),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildOrderItem(DeliveryOrder order, int index) {
-    Color priorityColor = order.priority == 'High' ? Colors.red :
-                         order.priority == 'Medium' ? Colors.orange : Colors.green;
-    
-    return Card(
-      margin: EdgeInsets.only(bottom: 8),
-      elevation: 4,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-      child: ExpansionTile(
-        leading: CircleAvatar(
-          backgroundColor: priorityColor,
-          child: Text(
-            order.priority[0],
-            style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-        title: Text(order.productName, style: TextStyle(fontWeight: FontWeight.w600)),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('📍 From: ${walmartLocations[walmartCoords.indexOf(order.originCoords)]}'),
-            Text('📍 To: ${order.destination}'),
-            Text('📦 Qty: ${order.quantity} | 🏋️ ${order.weight.toStringAsFixed(1)} kg'),
-          ],
-        ),
-        trailing: Container(
-          padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          decoration: BoxDecoration(
-            color: order.status == 'Delivered' ? Colors.green :
-                   order.status == 'In Transit' ? Colors.blue : Colors.orange,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Text(
-            order.status,
-            style: TextStyle(color: Colors.white, fontSize: 12),
-          ),
-        ),
-        children: [
-          Padding(
-            padding: EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('Distance: ${order.distance.toStringAsFixed(1)} km'),
-                Text('Carbon Footprint: ${order.carbonFootprint.toStringAsFixed(1)} kg CO₂'),
-                Text('Time Slot: ${order.timeSlot}'),
-                SizedBox(height: 8),
-                ElevatedButton(
-                  onPressed: () {
-                    setState(() => _selectedIndex = 1);
-                    _saveState();
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue[600],
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  child: Text('View on Map'),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildCarbonFootprintCard() {
-    double totalCarbon = orders.fold(0.0, (sum, order) => sum + order.carbonFootprint);
-    double savedCarbon = totalCarbon * 0.3;
-    
-    return Card(
-      elevation: 10,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(20),
-          gradient: LinearGradient(
-            colors: [Colors.green[300]!, Colors.green[600]!],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
-        ),
-        padding: EdgeInsets.all(20),
-        child: Column(
-          children: [
-            Text(
-              '🌱 Green Travel Impact',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
+              ),
+              child: Text(
+                'Accept Order',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
-            SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
-              children: [
-                _buildCarbonItem('Total CO₂', '${totalCarbon.toStringAsFixed(1)} kg', Colors.red[300]!),
-                _buildCarbonItem('Saved CO₂', '${savedCarbon.toStringAsFixed(1)} kg', Colors.green[300]!),
-                _buildCarbonItem('Efficiency', '${(savedCarbon/totalCarbon*100).toStringAsFixed(1)}%', Colors.blue[300]!),
-              ],
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildCarbonItem(String label, String value, Color color) {
+  Widget _buildDeliveryStats() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Driver: Ramesh Sharma',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              Container(
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _isDelivering ? Colors.orange[100] : Colors.green[100],
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  _isDelivering ? 'In Transit' : 'Delivered',
+                  style: TextStyle(
+                    color: _isDelivering ? Colors.orange[700] : Colors.green[700],
+                    fontWeight: FontWeight.bold,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          Text(
+            'Vehicle: Tata Ace Electric',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          Text(
+            'License: KA05-AB-1234',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          Text(
+            'Contact: +91 98765 43210',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+            ),
+          ),
+          SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(child: _buildStatCard('Distance', '${(_currentWaypoint * 4.2).toStringAsFixed(1)} km')),
+              SizedBox(width: 12),
+              Expanded(child: _buildStatCard('CO₂ Saved', '${(_currentWaypoint * 2.1).toStringAsFixed(1)} kg')),
+              SizedBox(width: 12),
+              Expanded(child: _buildStatCard('Progress', '${((_currentWaypoint / (_routePoints.length - 1)) * 100).toInt()}%')),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoChip(String label, String value) {
+    return Container(
+      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.blue[50],
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+          SizedBox(width: 4),
+          Text(
+            value,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.bold,
+              color: Colors.blue[700],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String label, String value) {
     return Container(
       padding: EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.grey[50],
         borderRadius: BorderRadius.circular(10),
-        boxShadow: [BoxShadow(color: Colors.black12, blurRadius: 4, offset: Offset(0, 2))],
       ),
       child: Column(
         children: [
           Text(
             value,
             style: TextStyle(
-              fontSize: 16,
+              fontSize: 18,
               fontWeight: FontWeight.bold,
-              color: color,
+              color: Colors.green[700],
             ),
           ),
+          SizedBox(height: 4),
           Text(
             label,
-            style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class LeaderboardScreen extends StatelessWidget {
+  final List<Map<String, dynamic>> leaderboardData = [
+    {'name': 'Ramesh Sharma', 'score': 2450, 'carbon': 185.2, 'rank': 1},
+    {'name': 'Suresh Sharma', 'score': 2380, 'carbon': 179.8, 'rank': 2},
+    {'name': 'Vijay Singh', 'score': 2320, 'carbon': 175.1, 'rank': 3},
+    {'name': 'Amit Patel', 'score': 2280, 'carbon': 172.3, 'rank': 4},
+    {'name': 'Raj Gupta', 'score': 2240, 'carbon': 168.9, 'rank': 5},
+    {'name': 'Krishna Reddy', 'score': 2190, 'carbon': 165.2, 'rank': 6},
+    {'name': 'Ganesh Yadav', 'score': 2150, 'carbon': 162.8, 'rank': 7},
+    {'name': 'Manoj Kumar', 'score': 2110, 'carbon': 159.7, 'rank': 8},
+    {'name': 'Ravi Joshi', 'score': 2080, 'carbon': 157.1, 'rank': 9},
+    {'name': 'Deepak Mehta', 'score': 2050, 'carbon': 154.8, 'rank': 10},
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Green Travel Leaderboard'),
+        elevation: 0,
+      ),
+      body: Column(
+        children: [
+          _buildStatsHeader(),
+          Expanded(
+            child: ListView.builder(
+              padding: EdgeInsets.all(16),
+              itemCount: leaderboardData.length,
+              itemBuilder: (context, index) {
+                final driver = leaderboardData[index];
+                return _buildLeaderboardCard(driver, index);
+              },
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildQuickStats() {
-    return Card(
-      elevation: 10,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      child: Padding(
-        padding: EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Quick Stats',
-              style: TextStyle(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.grey[800],
-              ),
+  Widget _buildStatsHeader() {
+    return Container(
+      margin: EdgeInsets.all(16),
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [Colors.green[700]!, Colors.green[500]!],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.green.withOpacity(0.3),
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          Text(
+            'Monthly Green Challenge',
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.bold,
+              color: Colors.white,
             ),
-            SizedBox(height: 16),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceAround,
+          ),
+          SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildHeaderStat('Total Drivers', '847'),
+              _buildHeaderStat('CO₂ Saved', '12.8T'),
+              _buildHeaderStat('Your Rank', '#1'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeaderStat(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: Colors.white,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.white70,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildLeaderboardCard(Map<String, dynamic> driver, int index) {
+    Color rankColor = Colors.grey[600]!;
+    IconData rankIcon = Icons.person;
+
+    if (index == 0) {
+      rankColor = Colors.amber[700]!;
+      rankIcon = Icons.emoji_events;
+    } else if (index == 1) {
+      rankColor = Colors.grey[500]!;
+      rankIcon = Icons.emoji_events;
+    } else if (index == 2) {
+      rankColor = Colors.orange[700]!;
+      rankIcon = Icons.emoji_events;
+    }
+
+    return Container(
+      margin: EdgeInsets.only(bottom: 12),
+      padding: EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: index == 0 ? Border.all(color: Colors.amber[300]!, width: 2) : null,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: rankColor.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(
+              rankIcon,
+              color: rankColor,
+              size: 24,
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildStatItem('Active Orders', '${orders.where((o) => o.status != 'Delivered').length}', Icons.pending_actions),
-                _buildStatItem('Total Distance', '${orders.fold(0.0, (sum, o) => sum + o.distance).toStringAsFixed(1)} km', Icons.route),
-                _buildStatItem('Availability', currentDriver.isAvailable ? 'Available' : 'Busy', Icons.event_available),
+                Text(
+                  driver['name'],
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                SizedBox(height: 4),
+                Row(
+                  children: [
+                    Icon(Icons.eco, color: Colors.green[600], size: 16),
+                    SizedBox(width: 4),
+                    Text(
+                      '${driver['carbon']} kg CO₂ saved',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[600],
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '#${driver['rank']}',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: rankColor,
+                ),
+              ),
+              SizedBox(height: 4),
+              Text(
+                '${driver['score']} pts',
+                style: TextStyle(
+                  fontSize: 14,
+                  color: Colors.grey[600],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// UnloadingScreen remains unchanged
+class UnloadingScreen extends StatefulWidget {
+  @override
+  _UnloadingScreenState createState() => _UnloadingScreenState();
+}
+
+class _UnloadingScreenState extends State<UnloadingScreen> {
+  DateTime? _scheduledTime;
+  bool _isUnloading = false;
+  int _progress = 0;
+  Timer? _unloadingTimer;
+
+  // Sample inventory data
+  final List<Map<String, dynamic>> _inventoryItems = [
+    {'name': 'Electronics', 'quantity': 50, 'status': 'Pending'},
+    {'name': 'Clothing', 'quantity': 100, 'status': 'Pending'},
+    {'name': 'Groceries', 'quantity': 200, 'status': 'Pending'},
+    {'name': 'Furniture', 'quantity': 20, 'status': 'Pending'},
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _scheduledTime = DateTime.now().add(Duration(hours: 2, minutes: 30));
+  }
+
+  void _startUnloading() {
+    setState(() {
+      _isUnloading = true;
+      _progress = 0;
+    });
+
+    _unloadingTimer = Timer.periodic(Duration(seconds: 1), (timer) {
+      if (_progress < 100) {
+        setState(() {
+          _progress += 2;
+          // Update inventory status as progress increases
+          if (_progress >= 25 && _inventoryItems[0]['status'] == 'Pending') {
+            _inventoryItems[0]['status'] = 'Unloaded';
+          }
+          if (_progress >= 50 && _inventoryItems[1]['status'] == 'Pending') {
+            _inventoryItems[1]['status'] = 'Unloaded';
+          }
+          if (_progress >= 75 && _inventoryItems[2]['status'] == 'Pending') {
+            _inventoryItems[2]['status'] = 'Unloaded';
+          }
+          if (_progress >= 100 && _inventoryItems[3]['status'] == 'Pending') {
+            _inventoryItems[3]['status'] = 'Unloaded';
+          }
+        });
+      } else {
+        timer.cancel();
+        setState(() {
+          _isUnloading = false;
+        });
+        _showUnloadingComplete();
+      }
+    });
+  }
+
+  void _showUnloadingComplete() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Unloading Complete!'),
+        content: Text('All items have been successfully unloaded at the warehouse.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: Text('OK'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  void dispose() {
+    _unloadingTimer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text('Unloading Schedule'),
+        elevation: 0,
+      ),
+      body: Padding(
+        padding: EdgeInsets.all(16),
+        child: Column(
+          children: [
+            _buildWarehouseInfo(),
+            SizedBox(height: 20),
+            _buildScheduleCard(),
+            SizedBox(height: 20),
+            _buildUnloadingProgress(),
+            SizedBox(height: 20),
+            _buildInventoryList(),
           ],
         ),
       ),
     );
   }
 
-  Widget _buildStatItem(String label, String value, IconData icon) {
-    return Column(
-      children: [
-        Row(
+  Widget _buildWarehouseInfo() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 60,
+            height: 60,
+            decoration: BoxDecoration(
+              color: Colors.blue[100],
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(
+              Icons.warehouse,
+              color: Colors.blue[700],
+              size: 30,
+            ),
+          ),
+          SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Walmart Distribution Center',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.grey[800],
+                  ),
+                ),
+                SizedBox(height: 4),
+                Text(
+                  'Bay 12, Sector 7, Bangalore',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+                SizedBox(height: 8),
+                Row(
+                  children: [
+                    Icon(Icons.access_time, size: 16, color: Colors.green[600]),
+                    SizedBox(width: 4),
+                    Text(
+                      'Open 24/7',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green[600],
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleCard() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Scheduled Unloading Time',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.grey[800],
+            ),
+          ),
+          SizedBox(height: 12),
+          Container(
+            padding: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.green[200]!),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(Icons.schedule, color: Colors.green[700]),
+                    SizedBox(width: 8),
+                    Text(
+                      '${_scheduledTime?.hour.toString().padLeft(2, '0')}:${_scheduledTime?.minute.toString().padLeft(2, '0')}',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.green[700],
+                      ),
+                    ),
+                  ],
+                ),
+                Text(
+                  'Today',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[600],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          SizedBox(height: 16),
+          if (!_isUnloading)
+            Container(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _startUnloading,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.green[700],
+                  foregroundColor: Colors.white,
+                  padding: EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                child: Text(
+                  'Start Unloading',
+                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildUnloadingProgress() {
+    return Container(
+      padding: EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black12,
+            blurRadius: 10,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Unloading Progress',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.grey[800],
+                ),
+              ),
+              Text(
+                '$_progress%',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green[700],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: 12),
+          LinearProgressIndicator(
+            value: _progress / 100,
+            backgroundColor: Colors.grey[200],
+            valueColor: AlwaysStoppedAnimation<Color>(Colors.green[700]!),
+            minHeight: 8,
+          ),
+          SizedBox(height: 8),
+          Text(
+            _isUnloading ? 'Unloading in progress...' : 'Ready to unload',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey[600],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInventoryList() {
+    return Expanded(
+      child: Container(
+        padding: EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(15),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black12,
+              blurRadius: 10,
+              offset: Offset(0, 5),
+            ),
+          ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Icon(icon, color: Colors.blue[600], size: 20),
-            SizedBox(width: 4),
             Text(
-              value,
+              'Inventory List',
               style: TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
                 color: Colors.grey[800],
               ),
             ),
-          ],
-        ),
-        Text(
-          label,
-          style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildMapView() {
-    return Stack(
-      children: [
-        GoogleMap(
-          onMapCreated: _onMapCreated,
-          initialCameraPosition: CameraPosition(
-            target: currentDriver.currentLocation,
-            zoom: 10,
-          ),
-          markers: _buildMarkers(),
-          polylines: _buildRoutes(),
-          myLocationEnabled: false,
-          myLocationButtonEnabled: false,
-          mapType: MapType.normal,
-          zoomControlsEnabled: true,
-          mapToolbarEnabled: false,
-          compassEnabled: true,
-          rotateGesturesEnabled: true,
-          scrollGesturesEnabled: true,
-          tiltGesturesEnabled: true,
-          zoomGesturesEnabled: true,
-          liteModeEnabled: false,
-          buildingsEnabled: true,
-          indoorViewEnabled: true,
-          trafficEnabled: true,
-        ),
-        Positioned(
-          bottom: 16,
-          left: 16,
-          right: 16,
-          child: Card(
-            elevation: 8,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-            child: Padding(
-              padding: EdgeInsets.all(12),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    'Route Overview',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
-                  SizedBox(height: 8),
-                  DropdownButton<String>(
-                    isExpanded: true,
-                    value: orders.isNotEmpty ? orders[0].id : null,
-                    items: orders.map((order) => DropdownMenuItem(
-                      value: order.id,
-                      child: Text('From ${walmartLocations[walmartCoords.indexOf(order.originCoords)]} to ${order.destination}'),
-                    )).toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        final order = orders.firstWhere((o) => o.id == value);
-                        mapController.animateCamera(CameraUpdate.newLatLngBounds(
-                          LatLngBounds(
-                            southwest: LatLng(
-                              min(order.originCoords.latitude, order.destinationCoords.latitude),
-                              min(order.originCoords.longitude, order.destinationCoords.longitude),
-                            ),
-                            northeast: LatLng(
-                              max(order.originCoords.latitude, order.destinationCoords.latitude),
-                              max(order.originCoords.longitude, order.destinationCoords.longitude),
-                            ),
-                          ),
-                          100,
-                        ));
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildTimeSlots() {
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '📅 Warehouse Schedule',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
-          ),
-          SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: timeSlots.length,
-              itemBuilder: (context, index) {
-                final slot = timeSlots[index];
-                final isCurrentSlot = slot.time == currentDriver.timeSlot;
-                
-                return Card(
-                  margin: EdgeInsets.only(bottom: 12),
-                  elevation: isCurrentSlot ? 10 : 6,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  child: Container(
+            SizedBox(height: 12),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _inventoryItems.length,
+                itemBuilder: (context, index) {
+                  final item = _inventoryItems[index];
+                  return Container(
+                    margin: EdgeInsets.only(bottom: 12),
+                    padding: EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      gradient: isCurrentSlot
-                          ? LinearGradient(colors: [Colors.blue[300]!, Colors.blue[600]!])
-                          : LinearGradient(colors: [Colors.grey[100]!, Colors.grey[300]!]),
+                      color: Colors.grey[50],
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey[200]!),
                     ),
-                    child: ExpansionTile(
-                      title: Text(
-                        slot.time,
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isCurrentSlot ? Colors.white : Colors.grey[800],
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Capacity: ${slot.trucksAllocated}/${slot.maxCapacity}',
-                        style: TextStyle(
-                          color: isCurrentSlot ? Colors.white70 : Colors.grey[600],
-                        ),
-                      ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              LinearProgressIndicator(
-                                value: slot.trucksAllocated / slot.maxCapacity,
-                                backgroundColor: isCurrentSlot ? Colors.white30 : Colors.grey[300],
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                  isCurrentSlot ? Colors.white : Colors.blue[600]!,
-                                ),
-                                minHeight: 8,
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              item['name'],
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
                               ),
-                              SizedBox(height: 12),
-                              Text(
-                                'Assigned Drivers:',
-                                style: TextStyle(
-                                  fontWeight: FontWeight.bold,
-                                  color: isCurrentSlot ? Colors.white : Colors.grey[800],
-                                ),
+                            ),
+                            SizedBox(height: 4),
+                            Text(
+                              'Quantity: ${item['quantity']}',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.grey[600],
                               ),
-                              ...slot.driverNames.map((name) => Padding(
-                                padding: EdgeInsets.only(top: 8),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.person, size: 20, color: isCurrentSlot ? Colors.white70 : Colors.grey[600]),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      name,
-                                      style: TextStyle(
-                                        color: isCurrentSlot ? Colors.white70 : Colors.grey[600],
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              )),
-                            ],
+                            ),
+                          ],
+                        ),
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: item['status'] == 'Unloaded'
+                                ? Colors.green[100]
+                                : Colors.orange[100],
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            item['status'],
+                            style: TextStyle(
+                              color: item['status'] == 'Unloaded'
+                                  ? Colors.green[700]
+                                  : Colors.orange[700],
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ],
                     ),
-                  ),
-                );
-              },
+                  );
+                },
+              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLeaderboard() {
-    return Padding(
-      padding: EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            '🏆 Green Driver Leaderboard',
-            style: TextStyle(
-              fontSize: 24,
-              fontWeight: FontWeight.bold,
-              color: Colors.grey[800],
-            ),
-          ),
-          SizedBox(height: 16),
-          Expanded(
-            child: ListView.builder(
-              itemCount: leaderboard.length,
-              itemBuilder: (context, index) {
-                final entry = leaderboard[index];
-                final isCurrentDriver = entry.driverName == currentDriver.name;
-                
-                return Card(
-                  margin: EdgeInsets.only(bottom: 8),
-                  elevation: isCurrentDriver ? 10 : 6,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
-                  child: Container(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(15),
-                      gradient: isCurrentDriver
-                          ? LinearGradient(colors: [Colors.green[300]!, Colors.green[600]!])
-                          : LinearGradient(colors: [Colors.grey[100]!, Colors.grey[300]!]),
-                    ),
-                    child: ListTile(
-                      leading: CircleAvatar(
-                        backgroundColor: index < 3 
-                            ? [Colors.amber, Colors.grey, Colors.orange][index]
-                            : Colors.blue[300],
-                        child: Text(
-                          '${index + 1}',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                      title: Text(
-                        entry.driverName,
-                        style: TextStyle(
-                          fontWeight: FontWeight.bold,
-                          color: isCurrentDriver ? Colors.white : Colors.grey[800],
-                        ),
-                      ),
-                      subtitle: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '🌱 ${entry.carbonSaved.toStringAsFixed(1)} kg CO₂ saved',
-                            style: TextStyle(
-                              color: isCurrentDriver ? Colors.white70 : Colors.grey[600],
-                            ),
-                          ),
-                          Text(
-                            '📦 ${entry.greenDeliveries} green deliveries',
-                            style: TextStyle(
-                              color: isCurrentDriver ? Colors.white70 : Colors.grey[600],
-                            ),
-                          ),
-                          Text(
-                            '🚛 ${entry.vehicleType}',
-                            style: TextStyle(
-                              color: isCurrentDriver ? Colors.white70 : Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                      trailing: Container(
-                        padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: isCurrentDriver ? Colors.white : Colors.green[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Text(
-                          '⭐ ${entry.rating.toStringAsFixed(1)}',
-                          style: TextStyle(
-                            color: isCurrentDriver ? Colors.green[600] : Colors.grey[800],
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                );
-              },
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
